@@ -27,13 +27,25 @@ status:
   system_other: 其他
 flow:
   screen_power: 屏幕功耗
+  screen_power_unavailable: 屏幕功耗：不可用
   heatpipe_power: SoC功耗
+  soc_power_unavailable: SoC功耗：不可用
   system_total: 系统总功耗
   system_in: 系统总输入
   battery_in: 电池充电功率
   battery_out: 电池放电功率
   power_loss: 损耗
   adapter_power: 适配器功率
+
+chart:
+  save: 保存
+  clear: 清空图表
+  saving: 正在保存...
+  clearing: 正在清空...
+  save_failed: 保存图表失败
+  clear_failed: 清空图表失败
+  history_error: 图表历史操作失败
+  dismiss_error: 关闭错误提示
 settings:
   appearance: 外观
   theme: 主题
@@ -45,24 +57,69 @@ settings:
   language_desc: 设置应用程序的语言
   auto: 自动
   animations: 动画
-  animations_desc: 显示功率变化的平滑过渡效果
+  animations_desc: 控制功率数字变化时的平滑动画，不影响数据采样或保存
+  show_screen_power: 显示屏幕功耗
+  show_screen_power_desc: 在功率流和实时图表中显示屏幕功耗，不影响系统总功耗统计
+  show_soc_power: 显示 SoC 功耗
+  show_soc_power_desc: 在功率流和实时图表中显示 SoC 功耗，不影响系统总功耗统计
+  show_power_usage_chart: 显示图表
+  show_power_usage_chart_desc: 显示并采样最近 100 个点；关闭后暂停采样和所有图表保存，但保留当前数据
   update_and_monitoring: 更新与监控
   update_frequency: 更新频率
   update_frequency_desc: 电力数据刷新频率
   background_monitoring: 后台监控
-  background_monitoring_desc: 在后台运行应用程序
+  background_monitoring_desc: 关闭主窗口后仍继续更新功耗和菜单栏；此功能当前始终开启
+  auto_save_chart: 自动保存图表
+  auto_save_chart_desc: 点击红色关闭按钮或从菜单栏图标退出时，若图表已开启且至少有 30 个点，则保存最近最多 100 点；Cmd+Q 不保存，且不影响手动保存
   status_bar: 状态栏
   status_bar_desc: 状态栏中显示的信息类型
   heatpipe_power: SoC功率
   screen_power: 屏幕功率
   system_total: 系统总功率
   show_charging_power: 显示充电功率
-  show_charging_power_desc: 在充电时显示充电功率而非系统功率
+  show_charging_power_desc: 充电时让菜单栏优先显示充电输入功率；关闭后始终显示所选状态栏项目
   about: 关于
   build: 构建
   license: 许可证
   author: 作者
   version: 版本
+
+history:
+  title: 功耗历史
+  delete_all: 删除所有历史
+  delete_all_title: 删除所有功耗历史？
+  delete_all_message: 此操作将永久删除所有已保存的功耗记录，并清空当前未保存的图表，且无法撤销。
+  delete_all_confirm: 全部删除
+  cancel: 取消
+  delete_failed: 删除功耗历史失败
+  cleanup_incomplete: 历史已删除，但安全磁盘清理未完成
+  retry_cleanup: 重试安全清理
+  retrying_cleanup: 正在重试清理…
+  cleanup_retry_failed: 安全磁盘清理再次失败
+  unknown_error: 未知错误
+  load_failed: 加载功耗历史失败
+  retry: 重试
+  empty: 暂无功耗历史
+  empty_desc: 已保存的充电或电池使用图表会显示在这里
+  select_session: 选择一条功耗记录以查看详情
+  unknown_device: 未知设备
+  unknown_adapter: 未知适配器
+  adapter: 适配器：{name}
+  export_data: 导出数据
+  export_filter: JSON 数据
+  delete: 删除
+  duration: 持续时间
+  average_power: 平均功耗
+  peak: 峰值
+  battery_change_rate: 电量变化率
+  percent_per_minute: 每分钟 {value}%
+  average_temperature: 平均温度
+  power_curve: 功耗曲线
+  additional_details: 更多详情
+  peak_temperature: 峰值温度
+  peak_adapter_power: 适配器峰值功率
+  adapter_rating: 适配器额定功率
+  unavailable: 不可用
 
 time:
   minute: 分钟

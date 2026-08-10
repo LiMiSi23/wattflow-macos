@@ -2,13 +2,13 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use tauri::{async_runtime, Manager, Runtime};
+use tauri::{async_runtime, AppHandle, Manager, Runtime};
 use tauri_plugin_pinia::ManagerExt;
 use tauri_specta::Event;
 use tokio::{select, sync::mpsc, time};
 use tpower::{
     ffi::smc::{SMCConnection, SMCPowerData, SMCReadSensor},
-    provider::{get_mac_ioreg, NormalizedResource},
+    provider::{duration_from_minutes, get_mac_ioreg, NormalizedData, NormalizedResource},
 };
 
 use crate::event::{PowerUpdatedEvent, PreferenceEvent, StatusBarItem, WindowLoadedEvent};
@@ -37,6 +37,7 @@ pub fn status_bar_text(
 
 impl PowerUpdatedEvent {
     pub fn new(value: f32) -> Self {
+        let value = if value.is_finite() { value } else { 0.0 };
         Self(format!("{:.1} w", value))
     }
 
@@ -55,12 +56,78 @@ pub struct PowerTickEvent {
     pub data: NormalizedResource,
 }
 
+fn finite_or_zero(value: f32) -> f32 {
+    if value.is_finite() {
+        value
+    } else {
+        0.0
+    }
+}
+
+fn smc_only_resource(smc: &SMCPowerData) -> NormalizedResource {
+    let delivery_rate = finite_or_zero(smc.delivery_rate);
+    let system_total = finite_or_zero(smc.system_total);
+    let battery_rate = finite_or_zero(smc.battery_rate);
+
+    NormalizedResource {
+        is_local: true,
+        is_charging: smc.is_charging(),
+        time_remain: duration_from_minutes(if smc.is_charging() {
+            smc.time_to_full
+        } else {
+            smc.time_to_empty
+        }),
+        data: NormalizedData {
+            system_in: delivery_rate,
+            system_load: system_total,
+            battery_power: battery_rate.max(delivery_rate - system_total),
+            adapter_power: delivery_rate,
+            brightness_power: finite_or_zero(smc.brightness),
+            heatpipe_power: finite_or_zero(smc.heatpipe),
+            temperature: finite_or_zero(smc.temperature),
+            ..Default::default()
+        },
+        brightness_power_available: smc.brightness_available,
+        heatpipe_power_available: smc.heatpipe_available,
+        ..Default::default()
+    }
+}
+
+fn emit_local_power_tick<R: Runtime>(
+    app: &AppHandle<R>,
+    smc: &SMCPowerData,
+    status_bar_item: &StatusBarItem,
+    show_charging: bool,
+) {
+    if let Err(error) = PowerUpdatedEvent::new_with(smc, status_bar_item, show_charging).emit(app) {
+        log::warn!("failed to emit PowerUpdatedEvent: {error}");
+    }
+
+    let data = match get_mac_ioreg() {
+        Ok(ioreg) => (&ioreg, smc).into(),
+        Err(error) => {
+            log::warn!("failed to read mac ioreg; using SMC-only data: {error:?}");
+            smc_only_resource(smc)
+        }
+    };
+
+    if let Err(error) = (PowerTickEvent { data }).emit(app) {
+        log::warn!("failed to emit PowerTickEvent: {error}");
+    }
+}
+
 pub fn start_sender<R: Runtime>(
     app: &impl Manager<R>,
     mut rx: mpsc::Receiver<SenderMessage>,
 ) -> async_runtime::JoinHandle<()> {
     let app = app.app_handle().clone();
-    let mut smc_conn = SMCConnection::new("AppleSMC").unwrap();
+    let mut smc_conn = match SMCConnection::new("AppleSMC") {
+        Ok(connection) => connection,
+        Err(error) => {
+            log::error!("failed to open AppleSMC connection ({error}); local monitoring disabled");
+            return async_runtime::spawn(async move { while rx.recv().await.is_some() {} });
+        }
+    };
 
     let mut timer = time::interval(Duration::from_millis(
         app.pinia()
@@ -81,36 +148,12 @@ pub fn start_sender<R: Runtime>(
             select! {
                 _ = timer.tick() => {
                     let smc = smc_conn.read_sensor();
-                    if let Err(e) = PowerUpdatedEvent::new_with(&smc, &status_bar_item, show_charging)
-                        .emit(&app)
-                    {
-                        log::warn!("failed to emit PowerUpdatedEvent: {e}");
-                    }
-                    match get_mac_ioreg() {
-                        Ok(ioreg) => {
-                            if let Err(e) = (PowerTickEvent { data: (&ioreg, &smc).into() }).emit(&app) {
-                                log::warn!("failed to emit PowerTickEvent: {e}");
-                            }
-                        }
-                        Err(e) => log::warn!("failed to read mac ioreg: {e:?}"),
-                    }
+                    emit_local_power_tick(&app, &smc, &status_bar_item, show_charging);
                 }
                 Some(msg) = rx.recv() => match msg {
                     SenderMessage::ImmediateSend => {
                         let smc = smc_conn.read_sensor();
-                        if let Err(e) = PowerUpdatedEvent::new_with(&smc, &status_bar_item, show_charging)
-                            .emit(&app)
-                        {
-                            log::warn!("failed to emit PowerUpdatedEvent: {e}");
-                        }
-                        match get_mac_ioreg() {
-                            Ok(ioreg) => {
-                                if let Err(e) = (PowerTickEvent { data: (&ioreg, &smc).into() }).emit(&app) {
-                                    log::warn!("failed to emit PowerTickEvent: {e}");
-                                }
-                            }
-                            Err(e) => log::warn!("failed to read mac ioreg: {e:?}"),
-                        }
+                        emit_local_power_tick(&app, &smc, &status_bar_item, show_charging);
                     },
                     SenderMessage::ChangeInterval(interval) => {
                         timer = time::interval(if interval < Duration::from_millis(500) {

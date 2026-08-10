@@ -8,13 +8,13 @@ use std::{
 
 use anyhow::bail;
 use core_foundation::{
-    base::{kCFAllocatorDefault, mach_port_t, TCFType},
+    base::{kCFAllocatorDefault, TCFType},
     dictionary::{CFDictionary, CFMutableDictionaryRef},
 };
 use derive_more::Add;
 use io_kit_sys::{
-    ret::kIOReturnSuccess, IOMasterPort, IORegistryEntryCreateCFProperties,
-    IOServiceGetMatchingService, IOServiceMatching,
+    kIOMasterPortDefault, ret::kIOReturnSuccess, IOObjectRelease,
+    IORegistryEntryCreateCFProperties, IOServiceGetMatchingService, IOServiceMatching,
 };
 use ratatui::widgets::SparklineBar;
 use serde::{Deserialize, Serialize};
@@ -25,6 +25,7 @@ use crate::{
     util::{dict_into, skip_until},
 };
 
+#[cfg(feature = "ios-monitoring")]
 pub mod remote;
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -41,6 +42,10 @@ pub struct NormalizedResource {
     pub max_capacity: i32,
     #[serde(default)]
     pub design_capacity: i32,
+    #[serde(default)]
+    pub brightness_power_available: bool,
+    #[serde(default)]
+    pub heatpipe_power_available: bool,
     #[serde(flatten)]
     pub data: NormalizedData,
 }
@@ -129,6 +134,18 @@ fn absolute_battery_level(io: &IORegistry) -> f32 {
     }
 }
 
+/// Convert a battery estimate to a duration while rejecting invalid sensor
+/// values and macOS sentinel values such as 65535 minutes.
+pub fn duration_from_minutes(minutes: f32) -> Duration {
+    const MAX_REASONABLE_MINUTES: f32 = 24.0 * 60.0;
+
+    if minutes.is_finite() && (0.0..=MAX_REASONABLE_MINUTES).contains(&minutes) {
+        Duration::from_secs_f32(minutes * 60.0)
+    } else {
+        Duration::ZERO
+    }
+}
+
 impl From<&IORegistry> for NormalizedResource {
     fn from(io: &IORegistry) -> Self {
         let (system_in, system_load, battery_power, adapter_power, efficiency_loss) =
@@ -147,7 +164,7 @@ impl From<&IORegistry> for NormalizedResource {
         Self {
             is_local: false,
             is_charging: io.is_charging.unwrap_or_default(),
-            time_remain: Duration::from_secs(io.time_remaining.unwrap_or_default() as u64 * 60),
+            time_remain: duration_from_minutes(io.time_remaining.unwrap_or_default() as f32),
             last_update: io.update_time.unwrap_or_default(),
             adapter_name: io
                 .adapter_details
@@ -158,6 +175,8 @@ impl From<&IORegistry> for NormalizedResource {
             max_capacity: io.apple_raw_max_capacity.unwrap_or_default(),
             design_capacity: io.design_capacity.unwrap_or_default(),
             current_capacity: io.apple_raw_current_capacity.unwrap_or_default(),
+            brightness_power_available: false,
+            heatpipe_power_available: false,
             data: NormalizedData {
                 system_in,
                 system_load,
@@ -185,13 +204,11 @@ impl From<(&IORegistry, &SMCPowerData)> for NormalizedResource {
             is_local: true,
             last_update: io.update_time.unwrap_or_default(),
             is_charging: smc.is_charging(),
-            time_remain: Duration::from_secs_f32(
-                60.0 * if smc.is_charging() {
-                    smc.time_to_full
-                } else {
-                    smc.time_to_empty
-                },
-            ),
+            time_remain: duration_from_minutes(if smc.is_charging() {
+                smc.time_to_full
+            } else {
+                smc.time_to_empty
+            }),
             adapter_name: io
                 .adapter_details
                 .name
@@ -201,6 +218,8 @@ impl From<(&IORegistry, &SMCPowerData)> for NormalizedResource {
             max_capacity: io.apple_raw_max_capacity.unwrap_or_default(),
             design_capacity: io.design_capacity.unwrap_or_default(),
             current_capacity: io.apple_raw_current_capacity.unwrap_or_default(),
+            brightness_power_available: smc.brightness_available,
+            heatpipe_power_available: smc.heatpipe_available,
             data: NormalizedData {
                 system_in: smc.delivery_rate,
                 system_load: smc.system_total,
@@ -227,23 +246,72 @@ impl From<(&IORegistry, &SMCPowerData)> for NormalizedResource {
 }
 
 pub fn get_mac_ioreg_dict() -> anyhow::Result<CFDictionary> {
-    let mut master_port: mach_port_t = 0;
-    if unsafe { IOMasterPort(0, &mut master_port) } != 0 {
-        bail!("could not get master port");
-    }
     let name = CString::new("AppleSmartBattery").unwrap();
     let matching_dict = unsafe { IOServiceMatching(name.as_ptr()) };
 
-    let result = unsafe { IOServiceGetMatchingService(master_port, matching_dict) };
+    let service = unsafe { IOServiceGetMatchingService(kIOMasterPortDefault, matching_dict) };
+    if service == 0 {
+        bail!("AppleSmartBattery service not found");
+    }
 
     let mut properties: CFMutableDictionaryRef = unsafe { mem::zeroed() };
-    if unsafe { IORegistryEntryCreateCFProperties(result, &mut properties, kCFAllocatorDefault, 0) }
-        != kIOReturnSuccess
-    {
-        bail!("could not get properties");
+    let status = unsafe {
+        IORegistryEntryCreateCFProperties(service, &mut properties, kCFAllocatorDefault, 0)
+    };
+    unsafe { IOObjectRelease(service) };
+
+    if status != kIOReturnSuccess {
+        bail!("could not get AppleSmartBattery properties (status={status})");
+    }
+    if properties.is_null() {
+        bail!("AppleSmartBattery returned no properties");
     }
 
     unsafe { Ok(CFDictionary::wrap_under_create_rule(properties)) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{duration_from_minutes, NormalizedResource};
+    use crate::{de::IORegistry, ffi::smc::SMCPowerData};
+    use std::time::Duration;
+
+    #[test]
+    fn rejects_invalid_battery_time_estimates() {
+        assert_eq!(duration_from_minutes(-1.0), Duration::ZERO);
+        assert_eq!(duration_from_minutes(f32::NAN), Duration::ZERO);
+        assert_eq!(duration_from_minutes(f32::INFINITY), Duration::ZERO);
+        assert_eq!(duration_from_minutes(65_535.0), Duration::ZERO);
+    }
+
+    #[test]
+    fn converts_reasonable_battery_time_estimates() {
+        assert_eq!(duration_from_minutes(90.0), Duration::from_secs(5_400));
+    }
+
+    #[test]
+    fn distinguishes_missing_sensor_values_from_real_zeroes() {
+        let ioreg = IORegistry::default();
+        let missing: NormalizedResource = (&ioreg, &SMCPowerData::default()).into();
+        assert_eq!(missing.brightness_power, 0.0);
+        assert_eq!(missing.heatpipe_power, 0.0);
+        assert!(!missing.brightness_power_available);
+        assert!(!missing.heatpipe_power_available);
+
+        let available_zeroes: NormalizedResource = (
+            &ioreg,
+            &SMCPowerData {
+                brightness_available: true,
+                heatpipe_available: true,
+                ..Default::default()
+            },
+        )
+            .into();
+        assert_eq!(available_zeroes.brightness_power, 0.0);
+        assert_eq!(available_zeroes.heatpipe_power, 0.0);
+        assert!(available_zeroes.brightness_power_available);
+        assert!(available_zeroes.heatpipe_power_available);
+    }
 }
 
 pub fn get_mac_ioreg() -> anyhow::Result<IORegistry> {

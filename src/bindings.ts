@@ -46,6 +46,54 @@ async deleteHistoryById(id: number) : Promise<Result<number, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async deleteAllHistory() : Promise<Result<DeleteAllHistoryResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_all_history") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async retryHistoryCleanup() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("retry_history_cleanup") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setChartPreferences(showPowerUsageChart: boolean, autoSaveChart: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_chart_preferences", { showPowerUsageChart, autoSaveChart }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getCurrentChart(deviceId: string) : Promise<Result<CurrentChart, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_current_chart", { deviceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveCurrentChart(deviceId: string) : Promise<Result<ChartHistorySaveResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_current_chart", { deviceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async clearCurrentChart(deviceId: string) : Promise<Result<CurrentChart, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("clear_current_chart", { deviceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -53,6 +101,9 @@ async deleteHistoryById(id: number) : Promise<Result<number, string>> {
 
 
 export const events = __makeEvents__<{
+chartHistoryErrorEvent: ChartHistoryErrorEvent,
+chartPointEvent: ChartPointEvent,
+chartResetEvent: ChartResetEvent,
 deviceEvent: DeviceEvent,
 devicePowerTickEvent: DevicePowerTickEvent,
 historyRecordedEvent: HistoryRecordedEvent,
@@ -61,6 +112,9 @@ powerUpdatedEvent: PowerUpdatedEvent,
 preferenceEvent: PreferenceEvent,
 windowLoadedEvent: WindowLoadedEvent
 }>({
+chartHistoryErrorEvent: "chart-history-error-event",
+chartPointEvent: "chart-point-event",
+chartResetEvent: "chart-reset-event",
 deviceEvent: "device-event",
 devicePowerTickEvent: "device-power-tick-event",
 historyRecordedEvent: "history-recorded-event",
@@ -97,22 +151,42 @@ export type Action =
  * Unsubcribing and resubscribing may recover the notification system.
  */
 "NotificationStopped" | "Paired"
-export type ChargingHistory = { id: number; fromLevel: number; endLevel: number; chargingTime: number; timestamp: number; name: string; udid: string; isRemote: number; adapterName: string }
-export type ChargingHistoryDetail = { avg: NormalizedData; peak: NormalizedData; curve: NormalizedResource[]; raw: string[] }
+export type ChargingHistory = { id: number; fromLevel: number; endLevel: number; chargingTime: number; timestamp: number; name: string; udid: string; isRemote: number; adapterName: string; historyKind: string; pointCount: number }
+export type ChargingHistoryDetail = { avg: HistorySummaryData; peak: HistorySummaryData; curve: HistoryCurvePoint[] }
+export type ChartHistoryErrorEvent = { operation: string; message: string }
+export type ChartHistorySaveResult = { historyId: number; sessionId: string; pointCount: number }
+export type ChartPoint = { sequence: number;
+/**
+ * Wall-clock capture time in Unix milliseconds. Sensor `last_update` is
+ * not a safe chart key because macOS may repeat it or report zero.
+ */
+capturedAt: number; data: NormalizedResource }
+export type ChartPointEvent = { deviceId: string; sessionId: string; point: ChartPoint }
+export type ChartResetEvent = { deviceId: string; sessionId: string }
+export type CurrentChart = { deviceId: string; sessionId: string; points: ChartPoint[] }
+export type DeleteAllHistoryResult = { deletedCount: number; cleanupComplete: boolean;
+/**
+ * Present only when database rows were committed deleted but the
+ * checkpoint/VACUUM/checkpoint cleanup could not be fully confirmed.
+ */
+cleanupError: string | null }
 export type DeviceEvent = { udid: string; name: string; interface: InterfaceType; action: Action }
 export type DevicePowerTickEvent = { udid: string; data: NormalizedResource }
 export type Duration = { secs: number; nanos: number }
+/**
+ * History-specific mirror of `NormalizedResource`. It keeps all existing
+ * curve/export telemetry except the two percentage fields omitted by its
+ * flattened `HistorySummaryData`.
+ */
+export type HistoryCurvePoint = ({ systemIn: number; systemLoad: number; batteryPower: number; adapterPower: number; efficiencyLoss: number; brightnessPower: number; heatpipePower: number; temperature: number; adapterWatts: number; adapterVoltage: number; adapterAmperage: number }) & { isLocal: boolean; isCharging: boolean; timeRemain: Duration; lastUpdate: number; adapterName: string | null; cycleCount: number; currentCapacity: number; maxCapacity: number; designCapacity: number; brightnessPowerAvailable: boolean; heatpipePowerAvailable: boolean }
 export type HistoryRecordedEvent = null
+/**
+ * History-specific mirror of `NormalizedData` that deliberately omits only
+ * the two battery-percentage fields. All other summary/export telemetry stays
+ * available for existing history consumers.
+ */
+export type HistorySummaryData = { systemIn: number; systemLoad: number; batteryPower: number; adapterPower: number; efficiencyLoss: number; brightnessPower: number; heatpipePower: number; temperature: number; adapterWatts: number; adapterVoltage: number; adapterAmperage: number }
 export type InterfaceType = "Unknown" | "USB" | "WiFi"
-export type NormalizedData = { systemIn: number; systemLoad: number; batteryPower: number; adapterPower: number; efficiencyLoss: number; 
-/**
- * 0 if not available
- */
-brightnessPower: number; 
-/**
- * 0 if not available
- */
-heatpipePower: number; batteryLevel: number; absoluteBatteryLevel: number; temperature: number; adapterWatts: number; adapterVoltage: number; adapterAmperage: number }
 export type NormalizedResource = ({ systemIn: number; systemLoad: number; batteryPower: number; adapterPower: number; efficiencyLoss: number; 
 /**
  * 0 if not available
@@ -121,10 +195,10 @@ brightnessPower: number;
 /**
  * 0 if not available
  */
-heatpipePower: number; batteryLevel: number; absoluteBatteryLevel: number; temperature: number; adapterWatts: number; adapterVoltage: number; adapterAmperage: number }) & { isLocal: boolean; isCharging: boolean; timeRemain: Duration; lastUpdate: number; adapterName: string | null; cycleCount: number; currentCapacity: number; maxCapacity: number; designCapacity?: number }
+heatpipePower: number; batteryLevel: number; absoluteBatteryLevel: number; temperature: number; adapterWatts: number; adapterVoltage: number; adapterAmperage: number }) & { isLocal: boolean; isCharging: boolean; timeRemain: Duration; lastUpdate: number; adapterName: string | null; cycleCount: number; currentCapacity: number; maxCapacity: number; designCapacity?: number; brightnessPowerAvailable?: boolean; heatpipePowerAvailable?: boolean }
 export type PowerTickEvent = { data: NormalizedResource }
 export type PowerUpdatedEvent = string
-export type PreferenceEvent = { theme: Theme } | { animationsEnabled: boolean } | { updateInterval: number } | { language: string } | { statusBarItem: StatusBarItem } | { statusBarShowCharging: boolean }
+export type PreferenceEvent = { theme: Theme } | { animationsEnabled: boolean } | { updateInterval: number } | { language: string } | { statusBarItem: StatusBarItem } | { statusBarShowCharging: boolean } | { showScreenPower: boolean } | { showHeatpipePower: boolean } | { showPowerUsageChart: boolean } | { autoSaveChart: boolean }
 export type StatusBarItem = "system" | "screen" | "heatpipe"
 export type Theme = "light" | "dark" | "system"
 export type WindowLoadedEvent = null

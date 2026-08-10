@@ -1,47 +1,56 @@
-name: build
+name: CI
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-macos:
-    strategy:
-      matrix:
-        include:
-          - target: universal-apple-darwin
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+  verify-macos-arm64:
+    name: Verify macOS arm64
+    runs-on: macos-14
+    timeout-minutes: 45
+    env:
+      CARGO_TERM_COLOR: always
 
-      - uses: actions/setup-node@v4
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install pinned pnpm
+        uses: pnpm/action-setup@v4
         with:
-          node-version: 21
+          version: 10.0.0-rc.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
           cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: install Rust
+      - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-apple-darwin,aarch64-apple-darwin
+          targets: aarch64-apple-darwin
 
-      - uses: tauri-apps/tauri-action@v0
-        env:
-          # https://github.com/tauri-apps/tauri-action/issues/740
-          CI: false
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
 
-        with:
-          tagName: v__VERSION__
-          releaseName: v__VERSION__
-          releaseBody: See the assets to download this version and install.
-          releaseDraft: true
-          prerelease: false
-          args: --target ${{ matrix.target }}
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Run Rust tests
+        run: cargo test --workspace --locked
+
+      - name: Check all Rust targets for Apple silicon
+        run: cargo check --workspace --all-targets --locked --target aarch64-apple-darwin

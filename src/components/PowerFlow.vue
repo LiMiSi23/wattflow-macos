@@ -20,6 +20,14 @@ const colorMap = {
   'text-indigo-500': 'text-indigo-950 dark:text-indigo-50 hover:bg-indigo-500/5 hover:border-indigo-500/20',
 }
 
+const flowArrowClass = `
+  relative rounded-full mx-2 w-full overflow-visible
+  [--base-color:theme(colors.blue.500)]
+  [--base-gradient-color:theme(colors.blue.300)]
+  dark:[--base-color:theme(colors.blue.700)]
+  dark:[--base-gradient-color:theme(colors.blue.400)]
+`
+
 const FlowItem: Component = ({ tooltip, icon, color }: FlowItemProps, { slots }) => {
   return (
     <CommonTooltip content={tooltip} as-child>
@@ -39,6 +47,7 @@ const FlowItem: Component = ({ tooltip, icon, color }: FlowItemProps, { slots })
   )
 }
 const power = usePower()
+const preference = usePreference()
 </script>
 
 <template>
@@ -69,27 +78,17 @@ const power = usePower()
         >
           <Shimmer
             :repeat-delay="1500"
-            class="rounded-full mx-2 w-full
-          [--base-color:theme(colors.blue.500)]
-          [--base-gradient-color:theme(colors.blue.300)]
-          dark:[--base-color:theme(colors.blue.700)]
-          dark:[--base-gradient-color:theme(colors.blue.400)]"
+            :class="flowArrowClass"
           >
             <div class="h-1 cursor-pointer" />
+            <span
+              aria-hidden="true"
+              class="pointer-events-none absolute -right-1 top-1/2 h-0 w-0 -translate-y-1/2 border-y-[6px] border-y-transparent border-l-[9px] border-l-blue-500 dark:border-l-blue-700"
+            />
           </Shimmer>
         </CommonTooltip>
 
         <div class="flex flex-col items-center gap-2 bg-muted/50 rounded-lg border p-2">
-          <div v-if="!power.isRemote" class="flex gap-4" color="text-blue-500">
-            <FlowItem :tooltip="$t('flow.screen_power')" :icon="Monitor" color="text-blue-500">
-              {{ formatter.format(power.brightnessPower || 0) }}
-            </FlowItem>
-
-            <FlowItem :tooltip="$t('flow.heatpipe_power')" :icon="Cpu" color="text-indigo-500">
-              {{ formatter.format(power.heatpipePower || 0) }}
-            </FlowItem>
-          </div>
-
           <FlowItem
             :tooltip="$t('flow.system_total')"
             :icon="power.isRemote ? Smartphone : Laptop"
@@ -97,18 +96,41 @@ const power = usePower()
           >
             {{ formatter.format(power.systemLoad) }}
           </FlowItem>
+
+          <div
+            v-if="!power.isRemote && (preference.showScreenPower || preference.showHeatpipePower)"
+            class="flex gap-2 rounded-md border bg-background/70 p-1.5"
+          >
+            <FlowItem
+              v-if="preference.showScreenPower"
+              :tooltip="power.brightnessPowerAvailable ? $t('flow.screen_power') : $t('flow.screen_power_unavailable')"
+              :icon="Monitor"
+              color="text-blue-500"
+            >
+              {{ power.brightnessPowerAvailable ? formatter.format(power.brightnessPower) : '*' }}
+            </FlowItem>
+
+            <FlowItem
+              v-if="preference.showHeatpipePower"
+              :tooltip="power.heatpipePowerAvailable ? $t('flow.heatpipe_power') : $t('flow.soc_power_unavailable')"
+              :icon="Cpu"
+              color="text-indigo-500"
+            >
+              {{ power.heatpipePowerAvailable ? formatter.format(power.heatpipePower) : '*' }}
+            </FlowItem>
+          </div>
         </div>
 
         <Shimmer
           :delay="2000"
           :repeat-delay="1500"
-          class="rounded-full mx-2 w-full
-          [--base-color:theme(colors.blue.500)]
-          [--base-gradient-color:theme(colors.blue.300)]
-          dark:[--base-color:theme(colors.blue.700)]
-          dark:[--base-gradient-color:theme(colors.blue.400)]"
+          :class="flowArrowClass"
         >
           <div class="h-1 cursor-pointer" />
+          <span
+            aria-hidden="true"
+            class="pointer-events-none absolute -right-1 top-1/2 h-0 w-0 -translate-y-1/2 border-y-[6px] border-y-transparent border-l-[9px] border-l-blue-500 dark:border-l-blue-700"
+          />
         </Shimmer>
 
         <FlowItem :tooltip="power.isCharging ? $t('flow.battery_in') : $t('flow.battery_out')" :icon="Battery" color="text-blue-500">

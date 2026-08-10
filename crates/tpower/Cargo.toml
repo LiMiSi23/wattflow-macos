@@ -1,13 +1,17 @@
 [package]
 name = "tpower"
-version = "0.2.2"
+version = "0.3.0"
+description = "Power telemetry library for Powerflow on macOS"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/LiMiSi23/wattflow-macos"
 
 [features]
 specta = [
   "dep:specta",
   "dep:specta-typescript"
 ]
+ios-monitoring = []
 
 [dependencies]
 core-foundation = "0.10.0"

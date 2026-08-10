@@ -1,0 +1,58 @@
+{
+  "avg": {
+    "systemIn": 44.5,
+    "systemLoad": 18.25,
+    "batteryPower": 25.1,
+    "adapterPower": 46.0,
+    "efficiencyLoss": 1.5,
+    "brightnessPower": 2.2,
+    "heatpipePower": 3.1,
+    "batteryLevel": 61,
+    "absoluteBatteryLevel": 74.2,
+    "temperature": 34.8,
+    "adapterWatts": 67.0,
+    "adapterVoltage": 20.0,
+    "adapterAmperage": 3.35
+  },
+  "peak": {
+    "systemIn": 52.0,
+    "systemLoad": 22.0,
+    "batteryPower": 31.0,
+    "adapterPower": 54.0,
+    "efficiencyLoss": 2.0,
+    "brightnessPower": 2.8,
+    "heatpipePower": 4.0,
+    "batteryLevel": 62,
+    "absoluteBatteryLevel": 75.0,
+    "temperature": 37.0,
+    "adapterWatts": 67.0,
+    "adapterVoltage": 20.0,
+    "adapterAmperage": 3.35
+  },
+  "curve": [
+    {
+      "isLocal": true,
+      "isCharging": true,
+      "timeRemain": { "secs": 3600, "nanos": 0 },
+      "lastUpdate": 1735689600,
+      "adapterName": "67W USB-C Power Adapter",
+      "cycleCount": 125,
+      "currentCapacity": 3500,
+      "maxCapacity": 5000,
+      "systemIn": 44.5,
+      "systemLoad": 18.25,
+      "batteryPower": 25.1,
+      "adapterPower": 46.0,
+      "efficiencyLoss": 1.5,
+      "brightnessPower": 2.2,
+      "heatpipePower": 3.1,
+      "batteryLevel": 61,
+      "absoluteBatteryLevel": 74.2,
+      "temperature": 34.8,
+      "adapterWatts": 67.0,
+      "adapterVoltage": 20.0,
+      "adapterAmperage": 3.35
+    }
+  ],
+  "raw": ["{\"legacy\":\"ioreg-v0.2.2\"}"]
+}

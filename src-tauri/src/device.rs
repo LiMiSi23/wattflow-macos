@@ -1,26 +1,35 @@
 use std::{
     collections::{HashMap, HashSet},
+    sync::RwLock,
+};
+#[cfg(feature = "ios-monitoring")]
+use std::{
     ffi::c_void,
     mem::{self, MaybeUninit},
-    sync::{Arc, RwLock},
+    sync::Arc,
     time::Duration,
 };
 
 use derive_more::derive::Deref;
 use serde::{Deserialize, Serialize};
 use specta::Type;
+#[cfg(feature = "ios-monitoring")]
 use tauri::{async_runtime, AppHandle, Manager};
 use tauri_specta::Event;
+#[cfg(feature = "ios-monitoring")]
 use tokio::{select, sync::mpsc, task::spawn_blocking, time};
+use tpower::{ffi::InterfaceType, provider::NormalizedResource};
+#[cfg(feature = "ios-monitoring")]
 use tpower::{
     ffi::{
         core_foundation::runloop::CFRunLoopRun,
         wrapper::{Device, ServiceConnection},
-        AMDeviceNotificationCallbackInfo, AMDeviceNotificationSubscribe, Action, InterfaceType,
+        AMDeviceNotificationCallbackInfo, AMDeviceNotificationSubscribe, Action,
     },
-    provider::{remote::get_device_ioreg, NormalizedResource},
+    provider::remote::get_device_ioreg,
 };
 
+#[cfg(feature = "ios-monitoring")]
 use crate::event::DeviceEvent;
 
 #[derive(Default, Deref)]
@@ -33,12 +42,14 @@ pub struct DevicePowerTickEvent {
     pub data: NormalizedResource,
 }
 
+#[cfg(feature = "ios-monitoring")]
 #[derive(Debug)]
 pub struct DeviceMessage {
     device: Device,
     action: Action,
 }
 
+#[cfg(feature = "ios-monitoring")]
 pub fn start_device_listener() -> mpsc::Receiver<DeviceMessage> {
     let (tx, rx) = mpsc::channel::<DeviceMessage>(10);
 
@@ -78,6 +89,7 @@ pub fn start_device_listener() -> mpsc::Receiver<DeviceMessage> {
     rx
 }
 
+#[cfg(feature = "ios-monitoring")]
 pub fn start_device_sender(handle: AppHandle) -> async_runtime::JoinHandle<()> {
     let mut rx = start_device_listener();
     let mut timer = time::interval(Duration::from_millis(2000));
@@ -136,6 +148,7 @@ pub fn start_device_sender(handle: AppHandle) -> async_runtime::JoinHandle<()> {
     })
 }
 
+#[cfg(feature = "ios-monitoring")]
 pub fn setup_device_listener(app: AppHandle) {
     DeviceEvent::listen(&app.clone(), move |event| {
         let event = event.payload;

@@ -61,7 +61,9 @@ const {
       </div>
     </div>
     <div class="flex gap-2">
-      <div
+      <button
+        type="button"
+        aria-label="History"
         class="rounded-md p-2 hover:bg-muted transition-colors cursor-pointer"
         @click="$route.path === '/history' ? $router.back() : $router.push('/history')"
       >
@@ -72,8 +74,10 @@ const {
             :class="{ 'text-secondary-foreground rotate-[-360deg]': $route.path === '/history' }"
           />
         </CommonTooltip>
-      </div>
-      <div
+      </button>
+      <button
+        type="button"
+        aria-label="Settings"
         class="rounded-md p-2 hover:bg-muted transition-colors cursor-pointer"
         @click="commands.openSettings()"
       >
@@ -83,7 +87,7 @@ const {
             class="text-muted-foreground size-5"
           />
         </CommonTooltip>
-      </div>
+      </button>
     </div>
   </div>
 </template>

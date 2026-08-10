@@ -1,16 +1,14 @@
-use std::process;
-
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    ActivationPolicy, Manager, Runtime,
+    ActivationPolicy, Manager, Wry,
 };
 use tauri_plugin_nspopover::{AppExt, WindowExt as _};
 use tauri_specta::Event;
 
-use crate::{event::PowerUpdatedEvent, ext::WebviewWindowExt};
+use crate::{event::PowerUpdatedEvent, ext::WebviewWindowExt, request_graceful_exit};
 
-pub fn setup_tray_icon<R: Runtime>(app: &impl Manager<R>) -> tauri::Result<()> {
+pub fn setup_tray_icon(app: &impl Manager<Wry>) -> tauri::Result<()> {
     let show = MenuItemBuilder::new("Show Window").build(app)?;
     let quit = MenuItemBuilder::new("Quit").build(app)?;
 
@@ -46,8 +44,7 @@ pub fn setup_tray_icon<R: Runtime>(app: &impl Manager<R>) -> tauri::Result<()> {
             }
         }
         val if val == quit.id() => {
-            tray_handle.app_handle().cleanup_before_exit();
-            process::exit(0);
+            request_graceful_exit(tray_handle.app_handle().clone());
         }
         _ => {}
     });

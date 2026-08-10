@@ -19,25 +19,31 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { open } from '@tauri-apps/plugin-shell'
-import { Activity, BadgeInfo, BatteryCharging, CircleDashed, ExternalLink, Eye, Gauge, Languages, Moon, Palette, RotateCw, Sun, SunMoon, Wallet } from 'lucide-vue-next'
+import { Activity, Archive, BadgeInfo, BatteryCharging, ChartLine, CircleDashed, Cpu, ExternalLink, Eye, Gauge, Languages, Monitor, Moon, Palette, RotateCw, Sun, SunMoon, Wallet } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 import { h, ref, watch } from 'vue'
 import { version } from '../package.json'
-import { events } from './bindings'
+import { commands, events } from './bindings'
 import { Skeleton } from './components/ui/skeleton'
-import { usePreference } from './stores/preference'
+import { startPreferenceStore, usePreference } from './stores/preference'
 
 const commitHash = __COMMIT_HASH__
 
 useSetup()
 
 const loading = ref(true)
+const chartPreferenceSyncing = ref(false)
 const preference = usePreference()
 
-preference.$tauri.start().then(async () => {
+startPreferenceStore(preference).then(async () => {
   const refs = storeToRefs(preference)
 
   for (const key in refs) {
+    // These two values share one acknowledged backend command so a close/quit
+    // cannot observe a half-updated chart policy.
+    if (key === 'showPowerUsageChart' || key === 'autoSaveChart')
+      continue
+
     // TODO: fix types
     const ref = refs[key as keyof typeof refs]
     watch(ref, () => {
@@ -46,6 +52,35 @@ preference.$tauri.start().then(async () => {
       } as any)
     })
   }
+
+  watch(
+    [() => preference.showPowerUsageChart, () => preference.autoSaveChart],
+    async ([showPowerUsageChart, autoSaveChart]) => {
+      chartPreferenceSyncing.value = true
+      try {
+        const result = await commands.setChartPreferences(
+          showPowerUsageChart,
+          autoSaveChart,
+        )
+        if (result.status === 'error') {
+          await events.chartHistoryErrorEvent.emit({
+            operation: 'chart preferences',
+            message: result.error,
+          })
+        }
+      }
+      catch (error) {
+        await events.chartHistoryErrorEvent.emit({
+          operation: 'chart preferences',
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
+      finally {
+        chartPreferenceSyncing.value = false
+      }
+    },
+    { flush: 'sync', immediate: true },
+  )
 
   loading.value = false
 })
@@ -60,7 +95,7 @@ function SettingsItem(props: SettingsItemProps, { slots }: SetupContext) {
   return (
     <div class="flex items-center justify-between">
       <div class="flex gap-4">
-        { h(props.icon, { class: 'size-5' }) }
+        { h(props.icon, { class: 'size-5 shrink-0' }) }
         <div class="flex flex-col gap-2">
           <Label class="font-medium">{props.name}</Label>
           <span class="text-xs text-muted-foreground mr-4">
@@ -91,6 +126,7 @@ function SettingsSection(props: SettingsSectionProps) {
 </script>
 
 <template>
+  <ChartHistoryErrorBanner />
   <div data-tauri-drag-region class="h-6" />
   <div class="space-y-8 mt-6 px-8 bg-background overflow-y-scroll h-dvh">
     <!-- Appearance Section -->
@@ -165,6 +201,49 @@ function SettingsSection(props: SettingsSectionProps) {
           class="data-[state=checked]:bg-blue-500"
         />
       </SettingsItem>
+
+      <SettingsItem
+        :name="$t('settings.show_screen_power')"
+        :description="$t('settings.show_screen_power_desc')"
+        :icon="Monitor"
+      >
+        <Skeleton v-if="loading" class="w-12 h-6" />
+        <Switch
+          v-else
+          id="show-screen-power"
+          v-model:checked="preference.showScreenPower"
+          class="data-[state=checked]:bg-blue-500"
+        />
+      </SettingsItem>
+
+      <SettingsItem
+        :name="$t('settings.show_soc_power')"
+        :description="$t('settings.show_soc_power_desc')"
+        :icon="Cpu"
+      >
+        <Skeleton v-if="loading" class="w-12 h-6" />
+        <Switch
+          v-else
+          id="show-soc-power"
+          v-model:checked="preference.showHeatpipePower"
+          class="data-[state=checked]:bg-blue-500"
+        />
+      </SettingsItem>
+
+      <SettingsItem
+        :name="$t('settings.show_power_usage_chart')"
+        :description="$t('settings.show_power_usage_chart_desc')"
+        :icon="ChartLine"
+      >
+        <Skeleton v-if="loading" class="w-12 h-6" />
+        <Switch
+          v-else
+          id="show-power-usage-chart"
+          v-model:checked="preference.showPowerUsageChart"
+          :disabled="chartPreferenceSyncing"
+          class="data-[state=checked]:bg-blue-500"
+        />
+      </SettingsItem>
     </div>
 
     <Separator />
@@ -211,6 +290,21 @@ function SettingsSection(props: SettingsSectionProps) {
           class="data-[state=checked]:bg-blue-500"
           disabled
           checked
+        />
+      </SettingsItem>
+
+      <SettingsItem
+        :name="$t('settings.auto_save_chart')"
+        :description="$t('settings.auto_save_chart_desc')"
+        :icon="Archive"
+      >
+        <Skeleton v-if="loading" class="w-12 h-6" />
+        <Switch
+          v-else
+          id="auto-save-chart"
+          v-model:checked="preference.autoSaveChart"
+          :disabled="chartPreferenceSyncing"
+          class="data-[state=checked]:bg-blue-500"
         />
       </SettingsItem>
 
@@ -295,7 +389,7 @@ function SettingsSection(props: SettingsSectionProps) {
           {{ commitHash.slice(0, 7) }}
           <a
             class="ml-2 mr-1 text-xs text-muted-foreground underline flex items-center gap-1 cursor-pointer"
-            @click="open(`https://github.com/lzt1008/powerflow/commit/${commitHash}`)"
+            @click="open(`https://github.com/LiMiSi23/wattflow-macos/commit/${commitHash}`)"
           >
             View on GitHub
             <ExternalLink class="size-3 text-muted-foreground" />

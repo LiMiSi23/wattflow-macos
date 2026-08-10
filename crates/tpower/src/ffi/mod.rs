@@ -1,16 +1,21 @@
+#[cfg(feature = "ios-monitoring")]
 use std::marker::{PhantomData, PhantomPinned};
 
+#[cfg(feature = "ios-monitoring")]
 use core_foundation::{
     array::CFArrayRef, dictionary::CFDictionaryRef, propertylist::CFPropertyListFormat,
     string::CFStringRef,
 };
+#[cfg(feature = "ios-monitoring")]
 use libc::{c_char, c_void};
 
 pub mod smc;
+#[cfg(feature = "ios-monitoring")]
 pub mod wrapper;
 
 pub use core_foundation;
 
+#[cfg(feature = "ios-monitoring")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default)]
 pub struct AMDevice {
@@ -18,8 +23,10 @@ pub struct AMDevice {
     _marker: PhantomData<(*mut u8, PhantomPinned)>,
 }
 
+#[cfg(feature = "ios-monitoring")]
 pub type AMDeviceRef = *const c_void;
 
+#[cfg(feature = "ios-monitoring")]
 #[derive(Copy, Clone, Debug, Default)]
 #[repr(C)]
 pub struct AMDeviceNotification {
@@ -60,6 +67,7 @@ pub enum Action {
     Paired = 4,
 }
 
+#[cfg(feature = "ios-monitoring")]
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct AMDeviceNotificationCallbackInfo {
@@ -68,6 +76,7 @@ pub struct AMDeviceNotificationCallbackInfo {
     pub subscription: *mut AMDeviceNotification,
 }
 
+#[cfg(feature = "ios-monitoring")]
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct AMDServiceConnection {
@@ -80,11 +89,15 @@ pub struct AMDServiceConnection {
     pub service_name: [c_char; 128],
 }
 
+#[cfg(feature = "ios-monitoring")]
 unsafe impl Send for AMDServiceConnection {}
+#[cfg(feature = "ios-monitoring")]
 unsafe impl Sync for AMDServiceConnection {}
 
+#[cfg(feature = "ios-monitoring")]
 pub type AMDServiceConnectionRef = *const AMDServiceConnection;
 
+#[cfg(feature = "ios-monitoring")]
 type AMDeviceNotificationCallback =
     extern "C" fn(_: *const AMDeviceNotificationCallbackInfo, _: *mut c_void);
 
@@ -100,6 +113,7 @@ pub enum InterfaceType {
     WiFi = 2,
 }
 
+#[cfg(feature = "ios-monitoring")]
 #[link(name = "MobileDevice", kind = "framework")]
 extern "C" {
     pub fn AMDCreateDeviceList() -> CFArrayRef;

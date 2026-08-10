@@ -28,6 +28,10 @@ pub enum PreferenceEvent {
     Language(String),
     StatusBarItem(StatusBarItem),
     StatusBarShowCharging(bool),
+    ShowScreenPower(bool),
+    ShowHeatpipePower(bool),
+    ShowPowerUsageChart(bool),
+    AutoSaveChart(bool),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Event, Type)]

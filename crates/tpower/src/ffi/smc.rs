@@ -36,8 +36,14 @@ impl SMCReadSensor for SMCConnection {
                         "PDTR" => acc.delivery_rate = val,
                         // System Total Power Consumed (Delayed 1 Second)
                         "PSTR" => acc.system_total = val,
-                        "PHPC" => acc.heatpipe = val,
-                        "PDBR" => acc.brightness = val,
+                        "PHPC" if val.is_finite() => {
+                            acc.heatpipe = val;
+                            acc.heatpipe_available = true;
+                        }
+                        "PDBR" if val.is_finite() => {
+                            acc.brightness = val;
+                            acc.brightness_available = true;
+                        }
                         "B0FC" => acc.full_charge_capacity = val,
                         "SBAR" => acc.current_capacity = val,
                         "CHCC" => acc.charging_status = val,
@@ -60,7 +66,9 @@ pub struct SMCPowerData {
     pub delivery_rate: f32,
     pub system_total: f32,
     pub heatpipe: f32,
+    pub heatpipe_available: bool,
     pub brightness: f32,
+    pub brightness_available: bool,
     pub full_charge_capacity: f32,
     pub current_capacity: f32,
     pub charging_status: f32,

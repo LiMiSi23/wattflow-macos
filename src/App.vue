@@ -14,6 +14,7 @@ watchEffect(() => {
 </script>
 
 <template>
+  <ChartHistoryErrorBanner />
   <Tabs
     v-model="tab"
     default-value="local"

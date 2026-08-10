@@ -8,7 +8,7 @@ use tauri::{
 };
 use tauri_specta::Event;
 
-use crate::ext::WebviewWindowExt;
+use crate::{ext::WebviewWindowExt, request_graceful_exit};
 
 #[derive(
     Debug,
@@ -81,7 +81,7 @@ pub fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
                 .unwrap();
         }
         MenuEvent::Close => {
-            app.exit(0);
+            request_graceful_exit(app.clone());
         }
     }
 }

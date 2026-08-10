@@ -9,6 +9,10 @@ export const usePreference = defineStore('preference', () => {
   const language = ref('en')
   const statusBarItem = ref<StatusBarItem>('system')
   const statusBarShowCharging = ref(true)
+  const showScreenPower = ref(true)
+  const showHeatpipePower = ref(true)
+  const showPowerUsageChart = ref(true)
+  const autoSaveChart = ref(false)
 
   return {
     theme,
@@ -17,6 +21,10 @@ export const usePreference = defineStore('preference', () => {
     language,
     statusBarItem,
     statusBarShowCharging,
+    showScreenPower,
+    showHeatpipePower,
+    showPowerUsageChart,
+    autoSaveChart,
   }
 }, {
   tauri: {
@@ -26,9 +34,21 @@ export const usePreference = defineStore('preference', () => {
   },
 })
 
+let preferenceStartPromise: Promise<void> | undefined
+
+/**
+ * The persistence plugin marks a store as enabled before hydration finishes.
+ * Share the first start promise so callers cannot observe the default values
+ * while the persisted state is still loading.
+ */
+export function startPreferenceStore(preference = usePreference()) {
+  preferenceStartPromise ??= preference.$tauri.start()
+  return preferenceStartPromise
+}
+
 export function usePreferenceAsync() {
   const preference = usePreference()
   const isLoading = ref(true)
-  preference.$tauri.start().then(() => isLoading.value = false)
+  startPreferenceStore(preference).then(() => isLoading.value = false)
   return { preference, isLoading }
 }

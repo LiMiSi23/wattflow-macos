@@ -1,4 +1,5 @@
 import { events } from '@/bindings'
+import { startPreferenceStore } from '@/stores/preference'
 import { useI18n } from 'vue-i18n'
 
 export function useSetup() {
@@ -15,7 +16,7 @@ export function useSetup() {
       : preference.theme === 'dark')
   }
 
-  preference.$tauri.start().then(() => {
+  startPreferenceStore(preference).then(() => {
     toggleDark()
     i18n.locale.value = preference.language
   })

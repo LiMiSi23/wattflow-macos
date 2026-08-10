@@ -1,9 +1,11 @@
 [package]
 name = "powerflow"
-version = "0.2.2"
-description = "Monitoring power usage of mac and iOS devices"
+version = "0.3.0"
+description = "Native power monitoring for Apple silicon Macs"
 authors = [ "Samuel Lyon" ]
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/LiMiSi23/wattflow-macos"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -22,6 +24,7 @@ crate-type = [
 # for disabling waring from `objc` crate
 default = [ "cargo-clippy" ]
 cargo-clippy = []
+ios-monitoring = [ "tpower/ios-monitoring" ]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [ "config-toml" ] }
@@ -72,3 +75,6 @@ cocoa = "0.26.0"
 objc = "0.2.7"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
+
+[dev-dependencies]
+tempfile = "3"

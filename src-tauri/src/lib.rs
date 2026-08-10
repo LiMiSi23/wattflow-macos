@@ -1,10 +1,20 @@
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 
 use database::{setup_database, ChargingHistory};
-use device::{setup_device_listener, start_device_sender, DevicePowerTickEvent, DeviceState};
+#[cfg(feature = "ios-monitoring")]
+use device::{setup_device_listener, start_device_sender};
+use device::{DevicePowerTickEvent, DeviceState};
 use event::{DeviceEvent, PowerUpdatedEvent, PreferenceEvent, Theme, WindowLoadedEvent};
 use ext::WebviewWindowExt;
-use history::{setup_history_recorder, ChargingHistoryDetail, HistoryRecordedEvent};
+use history::{
+    setup_history_recorder, ChargingHistoryDetail, ChartHistoryErrorEvent, ChartHistorySaveResult,
+    ChartPointEvent, ChartResetEvent, CurrentChart, DeleteAllHistoryResult, HistoryRecordedEvent,
+    HistoryRecorderHandle,
+};
 use local::{setup_sender_with_events, PowerTickEvent};
 use menu::setup_menu;
 use objc2_app_kit::{
@@ -15,7 +25,8 @@ use objc2_app_kit::{
 use specta_typescript::{BigIntExportBehavior, Typescript};
 use sqlx::{Pool, Sqlite};
 use tauri::{ActivationPolicy, AppHandle, Manager, RunEvent, State, Window, WindowEvent};
-use tauri_specta::{collect_commands, collect_events};
+use tauri_plugin_pinia::ManagerExt;
+use tauri_specta::{collect_commands, collect_events, Event};
 use tpower::ffi::InterfaceType;
 use tray_icon::setup_tray_icon;
 use util::setup_traffic_light_positioner;
@@ -29,6 +40,10 @@ mod local;
 mod menu;
 mod tray_icon;
 mod util;
+
+static EXIT_FLUSH_PENDING: AtomicBool = AtomicBool::new(false);
+static CLOSE_FLUSH_PENDING: AtomicBool = AtomicBool::new(false);
+const HISTORY_FLUSH_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[tauri::command]
 #[specta::specta]
@@ -103,11 +118,83 @@ async fn get_detail_by_id(
 
 #[tauri::command]
 #[specta::specta]
-async fn delete_history_by_id(id: i64, db: State<'_, Pool<Sqlite>>) -> Result<u64, String> {
-    database::delete_history_by_id(&db, id)
+async fn delete_history_by_id(
+    id: i64,
+    recorder: State<'_, HistoryRecorderHandle>,
+) -> Result<u64, String> {
+    recorder.delete_by_id(id).await
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn delete_all_history(
+    recorder: State<'_, HistoryRecorderHandle>,
+) -> Result<DeleteAllHistoryResult, String> {
+    recorder.delete_all().await
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn retry_history_cleanup(recorder: State<'_, HistoryRecorderHandle>) -> Result<(), String> {
+    recorder.retry_cleanup().await
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn set_chart_preferences(
+    show_power_usage_chart: bool,
+    auto_save_chart: bool,
+    app: AppHandle,
+    recorder: State<'_, HistoryRecorderHandle>,
+) -> Result<(), String> {
+    // Persist both values before acknowledging the UI. The settings switches
+    // stay disabled until this command resolves, so an immediate tray quit
+    // cannot leave the next launch with stale chart policy.
+    let pinia = app.pinia();
+    pinia
+        .set(
+            "preference",
+            "showPowerUsageChart",
+            show_power_usage_chart.into(),
+        )
+        .map_err(|error| error.to_string())?;
+    pinia
+        .set("preference", "autoSaveChart", auto_save_chart.into())
+        .map_err(|error| error.to_string())?;
+    pinia
+        .save_now("preference")
+        .map_err(|error| error.to_string())?;
+
+    recorder
+        .set_preferences(show_power_usage_chart, auto_save_chart)
         .await
-        .map(|v| v.rows_affected())
-        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn get_current_chart(
+    device_id: String,
+    recorder: State<'_, HistoryRecorderHandle>,
+) -> Result<CurrentChart, String> {
+    recorder.get_current_chart(device_id).await
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn save_current_chart(
+    device_id: String,
+    recorder: State<'_, HistoryRecorderHandle>,
+) -> Result<ChartHistorySaveResult, String> {
+    recorder.save_current_chart(device_id).await
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn clear_current_chart(
+    device_id: String,
+    recorder: State<'_, HistoryRecorderHandle>,
+) -> Result<CurrentChart, String> {
+    recorder.clear_current_chart(device_id).await
 }
 
 #[tauri::command]
@@ -131,7 +218,13 @@ pub fn create_specta() -> tauri_specta::Builder {
             switch_theme,
             get_detail_by_id,
             get_all_charging_history,
-            delete_history_by_id
+            delete_history_by_id,
+            delete_all_history,
+            retry_history_cleanup,
+            set_chart_preferences,
+            get_current_chart,
+            save_current_chart,
+            clear_current_chart
         ])
         .events(collect_events![
             DeviceEvent,
@@ -141,6 +234,9 @@ pub fn create_specta() -> tauri_specta::Builder {
             PowerUpdatedEvent,
             WindowLoadedEvent,
             HistoryRecordedEvent,
+            ChartPointEvent,
+            ChartResetEvent,
+            ChartHistoryErrorEvent,
         ]);
 
     #[cfg(debug_assertions)]
@@ -183,8 +279,11 @@ pub fn run() {
 
             setup_tray_icon(app)?;
             setup_sender_with_events(app);
-            start_device_sender(app.app_handle().clone());
-            setup_device_listener(app.app_handle().clone());
+            #[cfg(feature = "ios-monitoring")]
+            {
+                start_device_sender(app.app_handle().clone());
+                setup_device_listener(app.app_handle().clone());
+            }
             setup_history_recorder(app.app_handle().clone());
 
             setup_traffic_light_positioner(app.main_window().unwrap());
@@ -195,10 +294,17 @@ pub fn run() {
         .expect("error while running tauri application");
 
     app.run(|app, event| match event {
-        // prevent app from exiting when all windows are closed
-        RunEvent::ExitRequested { api, .. } => {
+        // Delay cancellable framework exit requests until the history actor
+        // has durably flushed. The native macOS Cmd+Q/application-menu Quit
+        // uses AppKit terminate directly and intentionally does not save;
+        // tray Quit calls the graceful helper below.
+        RunEvent::ExitRequested {
+            code: None, api, ..
+        } => {
             api.prevent_exit();
+            request_graceful_exit(app.clone());
         }
+        RunEvent::ExitRequested { code: Some(_), .. } => {}
         RunEvent::Reopen {
             has_visible_windows,
             ..
@@ -216,17 +322,112 @@ fn handle_window_event(window: &Window, event: &WindowEvent) {
         match event {
             WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
+                if CLOSE_FLUSH_PENDING
+                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                    .is_err()
+                {
+                    return;
+                }
 
-                window.hide().unwrap();
-                window
-                    .app_handle()
-                    .set_activation_policy(ActivationPolicy::Accessory)
-                    .unwrap();
+                let window = window.clone();
+                let app = window.app_handle().clone();
+                let Some(recorder) = app
+                    .try_state::<HistoryRecorderHandle>()
+                    .map(|state| state.inner().clone())
+                else {
+                    CLOSE_FLUSH_PENDING.store(false, Ordering::Release);
+                    report_flush_failure(
+                        &app,
+                        "window-close save",
+                        "history recorder is unavailable",
+                    );
+                    return;
+                };
+
+                tauri::async_runtime::spawn(async move {
+                    match flush_history_with_timeout(recorder).await {
+                        Ok(()) => {
+                            if let Err(error) = window.hide() {
+                                log::error!("failed to hide main window: {error}");
+                            }
+                            if let Err(error) =
+                                app.set_activation_policy(ActivationPolicy::Accessory)
+                            {
+                                log::error!("failed to change activation policy: {error}");
+                            }
+                        }
+                        Err(error) => {
+                            report_flush_failure(&app, "window-close save", &error);
+                        }
+                    }
+                    CLOSE_FLUSH_PENDING.store(false, Ordering::Release);
+                });
             }
             WindowEvent::ThemeChanged(theme) => {
                 println!("Theme changed to: {}", theme);
             }
             _ => (),
         }
+    }
+}
+
+/// Start the graceful-exit path used by the tray menu and cancellable Tauri
+/// exit requests. `app.exit(0)` is called only after the asynchronous flush
+/// succeeds; native Cmd+Q/application-menu Quit intentionally bypasses it.
+pub(crate) fn request_graceful_exit(app: AppHandle) {
+    if EXIT_FLUSH_PENDING
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return;
+    }
+
+    let Some(recorder) = app
+        .try_state::<HistoryRecorderHandle>()
+        .map(|state| state.inner().clone())
+    else {
+        EXIT_FLUSH_PENDING.store(false, Ordering::Release);
+        report_flush_failure(&app, "exit save", "history recorder is unavailable");
+        return;
+    };
+
+    tauri::async_runtime::spawn(async move {
+        match flush_history_with_timeout(recorder).await {
+            Ok(()) => app.exit(0),
+            Err(error) => {
+                EXIT_FLUSH_PENDING.store(false, Ordering::Release);
+                report_flush_failure(&app, "exit save", &error);
+            }
+        }
+    });
+}
+
+async fn flush_history_with_timeout(recorder: HistoryRecorderHandle) -> Result<(), String> {
+    tokio::time::timeout(HISTORY_FLUSH_TIMEOUT, recorder.flush_auto())
+        .await
+        .map_err(|_| "history save timed out after 10 seconds".to_string())?
+}
+
+fn report_flush_failure(app: &AppHandle, operation: &str, message: &str) {
+    log::error!("{operation} failed; keeping PowerFlow open: {message}");
+    ChartHistoryErrorEvent {
+        operation: operation.to_string(),
+        message: message.to_string(),
+    }
+    .emit(app)
+    .unwrap_or_else(|error| {
+        log::error!("failed to emit ChartHistoryErrorEvent: {error}");
+    });
+
+    if let Some(window) = app.main_window() {
+        if let Err(error) = window.show() {
+            log::error!("failed to show main window after history error: {error}");
+        }
+        if let Err(error) = window.set_focus() {
+            log::error!("failed to focus main window after history error: {error}");
+        }
+    }
+    if let Err(error) = app.set_activation_policy(ActivationPolicy::Regular) {
+        log::error!("failed to restore activation policy after history error: {error}");
     }
 }

@@ -2,7 +2,7 @@
 name = "powerflow"
 version = "0.3.0"
 description = "Native power monitoring for Apple silicon Macs"
-authors = [ "Samuel Lyon" ]
+authors = [ "Samuel Lyon", "LiMiSi23" ]
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/LiMiSi23/wattflow-macos"

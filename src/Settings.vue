@@ -28,6 +28,9 @@ import { Skeleton } from './components/ui/skeleton'
 import { startPreferenceStore, usePreference } from './stores/preference'
 
 const commitHash = __COMMIT_HASH__
+const commitUrl = /^[0-9a-f]{7,40}$/i.test(commitHash)
+  ? `https://github.com/LiMiSi23/wattflow-macos/commit/${commitHash}`
+  : null
 
 useSetup()
 
@@ -388,8 +391,9 @@ function SettingsSection(props: SettingsSectionProps) {
         <div class="text-sm flex items-center">
           {{ commitHash.slice(0, 7) }}
           <a
+            v-if="commitUrl"
             class="ml-2 mr-1 text-xs text-muted-foreground underline flex items-center gap-1 cursor-pointer"
-            @click="open(`https://github.com/LiMiSi23/wattflow-macos/commit/${commitHash}`)"
+            @click="open(commitUrl)"
           >
             View on GitHub
             <ExternalLink class="size-3 text-muted-foreground" />
@@ -409,7 +413,7 @@ function SettingsSection(props: SettingsSectionProps) {
           {{ $t('settings.author') }}
         </div>
         <div class="text-sm">
-          Samuel Lyon
+          Samuel Lyon · LiMiSi23
         </div>
       </div>
     </div>

@@ -14,7 +14,23 @@ import { defineConfig } from 'vite'
 
 const host = process.env.TAURI_DEV_HOST
 
-const commitHash = execSync('git rev-parse HEAD').toString().trim()
+function resolveCommitHash() {
+  const environmentHash = process.env.GITHUB_SHA?.trim()
+  if (environmentHash)
+    return environmentHash
+
+  try {
+    return execSync('git rev-parse HEAD', {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).toString().trim()
+  }
+  catch {
+    // GitHub's generated source archives intentionally omit the .git folder.
+    return 'source'
+  }
+}
+
+const commitHash = resolveCommitHash()
 
 // https://vitejs.dev/config/
 export default defineConfig(async mode => ({

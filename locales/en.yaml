@@ -1,0 +1,161 @@
+system_power: System Power
+power_flow: Power Flow
+on_battery: On Battery
+power_usage: Power Usage
+temperature: Temperature
+temperature_desc: Current battery temperature
+battery_health: Battery Health
+battery_health_desc: Current battery health
+cycle_count: Cycle Count
+cycle_count_desc: Total number of cycles
+energy: Energy
+designed_capacity: Designed Capacity
+times: times
+
+status:
+  on_battery: On Battery
+  offline: offline
+  charging_power: Charging Power
+  system_power: System Power
+  to_full: to full
+  to_empty: to empty
+  fully_charged: Fully Charged
+  battery_in: Battery In
+  power_loss: Power Loss
+  screen_power: Screen
+  heatpipe_power: SoC
+  system_total: System
+  system_other: Other
+
+flow:
+  screen_power: Screen Power
+  screen_power_unavailable: 'Screen Power: Unavailable'
+  heatpipe_power: SoC Power
+  soc_power_unavailable: 'SoC Power: Unavailable'
+  system_total: System Total
+  system_in: System In
+  battery_in: Battery In
+  battery_out: Battery Out
+  power_loss: Power Loss
+  adapter_power: Adapter Power
+
+chart:
+  save: Save
+  clear: Clear Chart
+  saving: Saving...
+  clearing: Clearing...
+  save_failed: Failed to save the chart
+  clear_failed: Failed to clear the chart
+  history_error: Chart history operation failed
+  dismiss_error: Dismiss error
+
+settings:
+  appearance: Appearance
+  theme: Theme
+  theme_light: Light
+  theme_dark: Dark
+  theme_system: System
+  theme_desc: Change the theme of the app
+  language: Language
+  language_desc: Set the language of the app
+  auto: Auto
+  animations: Animations
+  animations_desc: Animate changing power numbers without affecting sampling or saved data
+  show_screen_power: Show Screen Power
+  show_screen_power_desc: Show screen power in the power flow and live chart without changing the system total
+  show_soc_power: Show SoC Power
+  show_soc_power_desc: Show SoC power in the power flow and live chart without changing the system total
+  show_power_usage_chart: Show Power Usage Chart
+  show_power_usage_chart_desc: Show and sample the latest 100 points; turning this off pauses sampling and all chart saves but keeps current data
+  update_and_monitoring: Update & Monitoring
+  update_frequency: Update Frequency
+  update_frequency_desc: How often to refresh power data
+  background_monitoring: Background Monitoring
+  background_monitoring_desc: Keep updating power and the menu bar after the main window closes; this is currently always on
+  auto_save_chart: Auto-save Chart
+  auto_save_chart_desc: On the red window close button or Quit from the menu-bar icon, save up to the latest 100 points when the chart has at least 30; Cmd+Q does not save, and manual saving still works
+  status_bar: Status Bar
+  status_bar_desc: What kind of information to show in the status bar
+  system_total: System Total
+  screen_power: Screen Power
+  heatpipe_power: Heatpipe Power
+  show_charging_power: Show Charging Power
+  show_charging_power_desc: While charging, prioritize input power in the menu bar; turn this off to always show the selected status-bar item
+  about: About
+
+  version: Version
+  build: Build
+  license: License
+  author: Author
+
+history:
+  title: Power History
+  delete_all: Delete All History
+  delete_all_title: Delete all power history?
+  delete_all_message: This permanently deletes every saved power record and also clears the current unsaved chart. It cannot be undone.
+  delete_all_confirm: Delete All
+  cancel: Cancel
+  delete_failed: Failed to delete power history
+  cleanup_incomplete: History was deleted, but secure disk cleanup did not finish
+  retry_cleanup: Retry Secure Cleanup
+  retrying_cleanup: Retrying Cleanup…
+  cleanup_retry_failed: Secure disk cleanup failed again
+  unknown_error: Unknown error
+  load_failed: Failed to load power history
+  retry: Retry
+  empty: No power history saved yet
+  empty_desc: Saved charging and battery-use charts will appear here
+  select_session: Select a power record to view details
+  unknown_device: Unknown Device
+  unknown_adapter: Unknown Adapter
+  adapter: 'Adapter: {name}'
+  export_data: Export Data
+  export_filter: JSON Data
+  delete: Delete
+  duration: Duration
+  average_power: Average Power
+  peak: Peak
+  battery_change_rate: Battery Change Rate
+  percent_per_minute: '{value}%/min'
+  average_temperature: Average Temperature
+  power_curve: Power Curve
+  additional_details: Additional Details
+  peak_temperature: Peak Temperature
+  peak_adapter_power: Peak Adapter Power
+  adapter_rating: Adapter Rating
+  unavailable: Unavailable
+
+time:
+  minute: minute|minute|minutes
+  hour: minute|hour|hours
+
+time_ago_options:
+  day_future: in 0 days|tomorrow|in {n} days
+  day_past: 0 days ago|yesterday|{n} days ago
+  hour_future: in 0 hours|in 1 hour|in {n} hours
+  hour_past: 0 hours ago|1 hour ago|{n} hours ago
+  just_now: just now
+  minute_future: in 0 minutes|in 1 minute|in {n} minutes
+  minute_past: 0 minutes ago|1 minute ago|{n} minutes ago
+  month_future: in 0 months|next month|in {n} months
+  month_past: 0 months ago|last month|{n} months ago
+  second_future: just now|in {n} second|in {n} seconds
+  second_past: just now|{n} second ago|{n} seconds ago
+  short_day_future: in {n}d
+  short_day_past: '{n}d'
+  short_hour_future: in {n}h
+  short_hour_past: '{n}h'
+  short_minute_future: in {n}min
+  short_minute_past: '{n}min'
+  short_month_future: in {n}mo
+  short_month_past: '{n}mo'
+  short_second_future: in {n}s
+  short_second_past: '{n}s'
+  short_week_future: in {n}w
+  short_week_past: '{n}w'
+  short_year_future: in {n}y
+  short_year_past: '{n}y'
+  week_future: in 0 weeks|next week|in {n} weeks
+  week_past: 0 weeks ago|last week|{n} weeks ago
+  year_future: in 0 years|next year|in {n} years
+  year_past: 0 years ago|last year|{n} years ago

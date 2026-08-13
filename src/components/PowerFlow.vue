@@ -48,6 +48,23 @@ const FlowItem: Component = ({ tooltip, icon, color }: FlowItemProps, { slots })
 }
 const power = usePower()
 const preference = usePreference()
+
+// The charging state only describes whether charging is allowed; the battery
+// can still supplement an undersized adapter. Use the measured power balance
+// for the instantaneous flow direction, with a small deadband for sensors that
+// update at slightly different times.
+const FLOW_DIRECTION_EPSILON_W = 0.5
+const batteryFeedsSystem = computed(() => {
+  const input = Number(power.value.systemIn)
+  const load = Number(power.value.systemLoad)
+
+  if (!power.value.isCharging)
+    return true
+  if (!Number.isFinite(input) || !Number.isFinite(load))
+    return false
+
+  return load - input > FLOW_DIRECTION_EPSILON_W
+})
 </script>
 
 <template>
@@ -60,7 +77,6 @@ const preference = usePreference()
       <div
         v-else
         class="flex justify-between items-center w-full rounded-lg border bg-muted/50 p-4 font-mono text-secondary-foreground text-xs h-[120px]"
-        :class="[power.isCharging ? '' : 'flex-row-reverse']"
       >
         <FlowItem
           v-if="power.isCharging"
@@ -122,18 +138,23 @@ const preference = usePreference()
         </div>
 
         <Shimmer
+          :key="batteryFeedsSystem ? 'battery-feeds-system' : 'system-feeds-battery'"
           :delay="2000"
           :repeat-delay="1500"
+          :reverse="batteryFeedsSystem"
           :class="flowArrowClass"
         >
           <div class="h-1 cursor-pointer" />
           <span
             aria-hidden="true"
-            class="pointer-events-none absolute -right-1 top-1/2 h-0 w-0 -translate-y-1/2 border-y-[6px] border-y-transparent border-l-[9px] border-l-blue-500 dark:border-l-blue-700"
+            class="pointer-events-none absolute top-1/2 h-0 w-0 -translate-y-1/2 border-y-[6px] border-y-transparent"
+            :class="batteryFeedsSystem
+              ? '-left-1 border-r-[9px] border-r-blue-500 dark:border-r-blue-700'
+              : '-right-1 border-l-[9px] border-l-blue-500 dark:border-l-blue-700'"
           />
         </Shimmer>
 
-        <FlowItem :tooltip="power.isCharging ? $t('flow.battery_in') : $t('flow.battery_out')" :icon="Battery" color="text-blue-500">
+        <FlowItem :tooltip="batteryFeedsSystem ? $t('flow.battery_out') : $t('flow.battery_in')" :icon="Battery" color="text-blue-500">
           {{ formatter.format(power.batteryPower) }}
         </FlowItem>
       </div>

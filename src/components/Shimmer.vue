@@ -10,6 +10,7 @@ interface ShimmerProps {
   spread?: number
   delay?: number
   repeatDelay?: number
+  reverse?: boolean
 }
 
 defineOptions({
@@ -24,9 +25,9 @@ const props = defineProps<ShimmerProps>()
 <template>
   <div
     v-motion
-    :initial="{ backgroundPosition: '100% center' }"
+    :initial="{ backgroundPosition: props.reverse ? '0% center' : '100% center' }"
     :enter="{
-      backgroundPosition: '0% center',
+      backgroundPosition: props.reverse ? '100% center' : '0% center',
       transition: {
         repeat: Infinity,
         duration: 1200,
